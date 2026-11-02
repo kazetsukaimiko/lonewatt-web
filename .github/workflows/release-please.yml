@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    if: github.repository == 'kazetsukaimiko/lonewatt-web'
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          skip-github-release: true
+      # Stamp is UTC YEAR-MONTH_r plus github.run_number. Tag name is the build id.
+      - name: Tag YEAR-MONTH_rBUILD_NUM
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y-%m)_r${GITHUB_RUN_NUMBER}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${stamp}" >/dev/null 2>&1; then
+            echo "tag ${stamp} already exists"
+            exit 0
+          fi
+          tag_sha="$(gh api -X POST "repos/${GITHUB_REPOSITORY}/git/tags" \
+            -f tag="$stamp" \
+            -f message="$stamp" \
+            -f object="${GITHUB_SHA}" \
+            -f type=commit \
+            --jq .sha)"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/${stamp}" \
+            -f sha="$tag_sha"
+          echo "tagged ${stamp}"
